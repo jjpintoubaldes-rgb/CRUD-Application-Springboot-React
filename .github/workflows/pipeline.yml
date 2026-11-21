@@ -1,0 +1,68 @@
+name: CI-CD CRUD
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: [self-hosted, crud-practica]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Iniciar MySQL
+        run: |
+          docker compose \
+            --env-file /home/jhamel/CRUD-Application-Springboot-React/.env \
+            -p crud-practica \
+            up -d --wait db
+
+      - name: Probar Spring Boot
+        shell: bash
+        run: |
+          set -a
+          source /home/jhamel/CRUD-Application-Springboot-React/.env
+          set +a
+          export SPRING_DATASOURCE_PASSWORD="$DB_PASSWORD"
+
+          docker run --rm \
+            --user "$(id -u):$(id -g)" \
+            --network crud-practica_red_crud \
+            -e HOME=/tmp \
+            -e SPRING_DATASOURCE_URL=jdbc:mysql://db:3306/crud \
+            -e SPRING_DATASOURCE_USERNAME=cruduser \
+            -e SPRING_DATASOURCE_PASSWORD \
+            -v "$PWD/backend/crud-application:/app" \
+            -w /app \
+            maven:3.9-eclipse-temurin-17 \
+            mvn -B -Dmaven.repo.local=/tmp/.m2/repository clean test
+
+  build:
+    needs: test
+    runs-on: [self-hosted, crud-practica]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Construir imagenes
+        run: |
+          docker compose \
+            --env-file /home/jhamel/CRUD-Application-Springboot-React/.env \
+            -p crud-practica \
+            build
+
+  deploy:
+    needs: build
+    runs-on: [self-hosted, crud-practica]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Desplegar contenedores
+        run: |
+          docker compose \
+            --env-file /home/jhamel/CRUD-Application-Springboot-React/.env \
+            -p crud-practica \
+            up -d --no-build

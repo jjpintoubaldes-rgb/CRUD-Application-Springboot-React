@@ -1,0 +1,48 @@
+name: crud-practica
+
+services:
+  db:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+      MYSQL_DATABASE: crud
+      MYSQL_USER: cruduser
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - mysql_data:/var/lib/mysql
+    networks:
+      - red_crud
+    healthcheck:
+      test: ["CMD-SHELL", "MYSQL_PWD=\"$$MYSQL_ROOT_PASSWORD\" mysqladmin ping -h 127.0.0.1 -u root --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 30s
+
+  backend:
+    build: ./backend/crud-application
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://db:3306/crud
+      SPRING_DATASOURCE_USERNAME: cruduser
+      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - red_crud
+
+  frontend:
+    build: ./frontend/crudfront
+    ports:
+      - "3010:80"
+    depends_on:
+      - backend
+    networks:
+      - red_crud
+
+volumes:
+  mysql_data:
+
+networks:
+  red_crud:
+    driver: bridge
